@@ -40,6 +40,7 @@ public class SayahRayanZombieRuntime : ModuleRules
 				"Slate",
 				"SlateCore",
 				"AIModule", 
+				"NavigationSystem",
 				"GameAI_Zombie"
 				// ... add private dependencies that you statically link with here ...	
 			}

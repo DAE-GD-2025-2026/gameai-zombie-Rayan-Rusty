@@ -9,19 +9,35 @@
 UTask_WanderAround_SayahRayan::UTask_WanderAround_SayahRayan()
 {
 	NodeName = "Wander Around";
+	bNotifyTick = true;
 }
 
 EBTNodeResult::Type UTask_WanderAround_SayahRayan::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
 	AAIController* Controller = OwnerComp.GetAIOwner();
 	if (!Controller) return EBTNodeResult::Failed;
-	
-	ASurvivorPawn* survivor = Cast<ASurvivorPawn>(Controller->GetPawn());
-	if (!survivor) return EBTNodeResult::Failed;
-	
-	UBlackboardComponent* board = OwnerComp.GetBlackboardComponent();
-	if (!board) return EBTNodeResult::Failed;
+
+	APawn* Pawn = Controller->GetPawn();
+	if (!Pawn) return EBTNodeResult::Failed;
 	
 	
-	return Super::ExecuteTask(OwnerComp, NodeMemory);
+	FVector PawnLocation = Pawn->GetActorLocation();
+	FVector2D Position2D(PawnLocation.X, PawnLocation.Y);
+
+	FVector2D Forward(Pawn->GetActorForwardVector().X, Pawn->GetActorForwardVector().Y);
+	FVector2D CircleCenter = Position2D + Forward * OffsetDistance;
+
+	WanderAngle += FMath::DegreesToRadians(FMath::RandRange(-MaxAngleChange, MaxAngleChange));
+
+	FVector2D WanderTarget(
+		CircleCenter.X + FMath::Cos(WanderAngle) * WanderRadius,
+		CircleCenter.Y + FMath::Sin(WanderAngle) * WanderRadius
+	);
+
+	FVector TargetLocation(WanderTarget.X, WanderTarget.Y, PawnLocation.Z);
+
+	Controller->MoveToLocation(TargetLocation, AcceptanceRadius, false);
+
+	return EBTNodeResult::Succeeded;
+
 }

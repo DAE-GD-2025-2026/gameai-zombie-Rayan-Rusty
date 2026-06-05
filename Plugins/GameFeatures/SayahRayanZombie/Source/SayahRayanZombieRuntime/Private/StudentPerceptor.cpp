@@ -37,19 +37,15 @@ void UStudentPerceptor::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 	
 	APawn* OwnerPawn = Cast<APawn>(GetOwner());
 	if (!OwnerPawn) return;
-	GEngine->AddOnScreenDebugMessage(5, 1.f, FColor::Green, 
-FString::Printf(TEXT("PAwn went through!")));
+
 	
 	AAIController* control = Cast<AAIController>(OwnerPawn->GetController());
 	if (!control) return;
-	GEngine->AddOnScreenDebugMessage(5, 1.f, FColor::Red, 
-FString::Printf(TEXT("AI went through!")));
+;
 	
 	UBlackboardComponent* board = control->GetBlackboardComponent();
 	if (!board) return;
-	GEngine->AddOnScreenDebugMessage(5, 1.f, FColor::Blue, 
-FString::Printf(TEXT("Board went through!")));
-	
+
 	
 
 
@@ -88,7 +84,10 @@ FString::Printf(TEXT("Board went through!")));
 		
 		if (AHouse* SensedHouse = Cast<AHouse>(Actor) )
 		{
-			board->SetValueAsObject(FName("House"), SensedHouse);
+			if (!board->GetValueAsObject(FName("House")))
+			{
+				board->SetValueAsObject(FName("House"), SensedHouse);
+			}
 		}
 		
 		
