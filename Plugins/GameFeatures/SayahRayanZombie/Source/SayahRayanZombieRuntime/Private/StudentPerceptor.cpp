@@ -42,10 +42,14 @@ FString::Printf(TEXT("PAwn went through!")));
 	
 	AAIController* control = Cast<AAIController>(OwnerPawn->GetController());
 	if (!control) return;
+	GEngine->AddOnScreenDebugMessage(5, 1.f, FColor::Red, 
+FString::Printf(TEXT("AI went through!")));
 	
-	UBlackboardComponent* board = AiController->GetBlackboardComponent();
+	UBlackboardComponent* board = control->GetBlackboardComponent();
 	if (!board) return;
-
+	GEngine->AddOnScreenDebugMessage(5, 1.f, FColor::Blue, 
+FString::Printf(TEXT("Board went through!")));
+	
 	
 
 
