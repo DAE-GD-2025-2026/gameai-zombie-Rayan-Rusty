@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "BehaviorTree/BTTaskNode.h"
+#include "Village/House/House.h"
 #include "Task_MoveToHouse_SayahRayan.generated.h"
 
 /**
@@ -16,4 +17,8 @@ class SAYAHRAYANZOMBIERUNTIME_API UTask_MoveToHouse_SayahRayan : public UBTTaskN
 public:
 	UTask_MoveToHouse_SayahRayan();
 	virtual  EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
+	
+private:
+	TSet<AHouse*> VisitedHouses;
+	bool movingToHouse {false};
 };
