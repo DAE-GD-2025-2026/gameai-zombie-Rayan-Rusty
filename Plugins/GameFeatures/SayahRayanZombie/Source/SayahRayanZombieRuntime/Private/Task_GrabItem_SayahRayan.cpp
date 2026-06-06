@@ -33,19 +33,6 @@ EBTNodeResult::Type UTask_GrabItem_SayahRayan::ExecuteTask(UBehaviorTreeComponen
 	UStaminaComponent* StaminaComp = Survivor->FindComponentByClass<UStaminaComponent>();
 	
 	ABaseItem* ItemToGrab = nullptr;
-	bool bNeedsHealth = HealthComp && HealthComp->GetHealth() < 50.f;
-	bool bNeedsStamina = StaminaComp && StaminaComp->GetCurrentStamina() < 50.f;
-	
-	if (bNeedsHealth)
-	{
-		if (AMedkit* Medkit = Cast<AMedkit>(Board->GetValueAsObject(FName("Medkit"))))
-			ItemToGrab = Medkit;
-	}
-	else if (bNeedsStamina)
-	{
-		if (AFood* Food = Cast<AFood>(Board->GetValueAsObject(FName("Food"))))
-			ItemToGrab = Food;
-	}
 
 	if (!ItemToGrab)
 	{
@@ -62,8 +49,9 @@ EBTNodeResult::Type UTask_GrabItem_SayahRayan::ExecuteTask(UBehaviorTreeComponen
 	}
 
 	if (!ItemToGrab) return EBTNodeResult::Failed;
+	
+	float Dist = FVector::Dist(Survivor->GetActorLocation(), ItemToGrab->GetActorLocation());
 
-	// Now do the inventory check and grab
 	UInventoryComponent* Inventory = Survivor->FindComponentByClass<UInventoryComponent>();
 	if (!Inventory) return EBTNodeResult::Failed;
 
@@ -78,7 +66,14 @@ EBTNodeResult::Type UTask_GrabItem_SayahRayan::ExecuteTask(UBehaviorTreeComponen
 		}
 	}
 
-	if (EmptySlotIndex == -1) return EBTNodeResult::Failed;
+	if (EmptySlotIndex == -1)
+	{
+		GEngine->AddOnScreenDebugMessage(6, 2.f, FColor::Red, TEXT("GrabItem FAILED: No empty slot"));
+		return EBTNodeResult::Failed;
+	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("Attempting grab: Slot=%d, Item=%s, Dist=%.1f"),
+	EmptySlotIndex, *ItemToGrab->GetName(), Dist);
 
 	if (Inventory->GrabItem(EmptySlotIndex, ItemToGrab))
 	{
@@ -87,11 +82,25 @@ EBTNodeResult::Type UTask_GrabItem_SayahRayan::ExecuteTask(UBehaviorTreeComponen
 		else if (Cast<APistol>(ItemToGrab))  Board->SetValueAsObject(FName("Handgun"), nullptr);
 		else if (Cast<AShotgun>(ItemToGrab)) Board->SetValueAsObject(FName("Shotgun"), nullptr);
 
+		Board->SetValueAsBool(FName("ItemSeen") , false);
+		
+		if (Cast<APistol>(ItemToGrab) || Cast<AShotgun>(ItemToGrab))
+			Board->SetValueAsBool(FName("HasWeapon"), true);
+		
+		bool NowFull {true};
+		for (ABaseItem* Item :CurrentInventory)
+		{
+			if (Item == nullptr) { NowFull = false; }
+		}
+		Board->SetValueAsBool(FName("IsInventoryFull"), NowFull);
 		return EBTNodeResult::Succeeded;
 	}
+	else
+	{
+
+	}
 	
-	if (Cast<APistol>(ItemToGrab) || Cast<AShotgun>(ItemToGrab))
-		Board->SetValueAsBool(FName("HasWeapon"), true);
+
 
 	return EBTNodeResult::Failed;
 }
