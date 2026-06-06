@@ -29,24 +29,55 @@ EBTNodeResult::Type UTask_UseItem_SayahRayan::ExecuteTask(UBehaviorTreeComponent
 	UInventoryComponent* Inventory = Survivor->FindComponentByClass<UInventoryComponent>();
 	if (!Inventory) return EBTNodeResult::Failed;
 
-	bool bNeedsHealth = HealthComp && HealthComp->GetHealth() < 50.f;
-	bool bNeedsStamina = StaminaComp && StaminaComp->GetCurrentStamina() < 50.f;
 
+	float MissingHealth = HealthComp->GetMaxHealth() - HealthComp->GetHealth();
+	float MissingStamina = StaminaComp->GetMaxStamina() - StaminaComp->GetCurrentStamina();
+	if (MissingHealth <= 0.f && MissingStamina <= 0.f) return EBTNodeResult::Failed;
+	
+	float HealthPercent = HealthComp->GetHealth() / HealthComp->GetMaxHealth();
+	float StaminaPercent = StaminaComp->GetCurrentStamina() / StaminaComp->GetMaxStamina();
+	bool bStaminaMoreUrgent = StaminaPercent < HealthPercent;
+	
 	TArray<ABaseItem*> const& CurrentInventory = Inventory->GetInventory();
 
-	for (int i = 0; i < CurrentInventory.Num(); i++)
+	int BestItemIndex {-1};
+	float BestDiff = FLT_MAX;
+	
+	for (int i = 0;  i < CurrentInventory.Num() ; ++i)
 	{
-		if (bNeedsHealth && Cast<AMedkit>(CurrentInventory[i]))
+		if (!CurrentInventory[i]) continue;
+		
+		float Missing = 0.f;
+		float Max = 1.f;
+
+		if (CurrentInventory[i]->GetItemType() == EItemType::Medkit)
 		{
-			Inventory->UseItem(i);
-			return EBTNodeResult::Succeeded;
+			if (bStaminaMoreUrgent) continue; 
+			Missing = MissingHealth;
+			Max = HealthComp->GetMaxHealth();
 		}
-		if (bNeedsStamina && Cast<AFood>(CurrentInventory[i]))
+		else if (CurrentInventory[i]->GetItemType() == EItemType::Food)
 		{
-			Inventory->UseItem(i);
-			return EBTNodeResult::Succeeded;
+			if (!bStaminaMoreUrgent) continue; 
+			Missing = MissingStamina;
+			Max = StaminaComp->GetMaxStamina();
+		}
+		else continue;
+
+		float ItemValue = static_cast<float>(CurrentInventory[i]->GetValue());
+		if (ItemValue > Missing) continue;
+		
+		float Diff = FMath::Abs(Missing - CurrentInventory[i]->GetValue());
+		if (Diff < BestDiff)
+		{
+			BestDiff = Diff;
+			BestItemIndex = i;
 		}
 	}
+	
+	if (BestItemIndex == -1) return EBTNodeResult::Failed;
 
-	return EBTNodeResult::Failed;
+	Inventory->UseItem(BestItemIndex);
+	Inventory->RemoveItem(BestItemIndex);
+	return EBTNodeResult::Succeeded;
 }
