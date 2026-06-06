@@ -32,28 +32,55 @@ EBTNodeResult::Type UTask_UseGun_SayahRayan::ExecuteTask(UBehaviorTreeComponent&
 	UInventoryComponent* Inventory = Survivor->FindComponentByClass<UInventoryComponent>();
 	if (!Inventory) return EBTNodeResult::Failed;
 
-	// Find a weapon in inventory
+
 	ABaseItem* WeaponToUse = nullptr;
 	int WeaponSlotIndex = -1;
 
+	
+	
+	
+	
+	
 	TArray<ABaseItem*> const& CurrentInventory = Inventory->GetInventory();
 	for (int i = 0; i < CurrentInventory.Num(); i++)
 	{
 		if (Cast<APistol>(CurrentInventory[i]) || Cast<AShotgun>(CurrentInventory[i]))
 		{
+			if (CurrentInventory[i]->GetValue() <= 0)
+			{
+				Inventory->RemoveItem(i);
+				continue;
+			}
+			
 			WeaponToUse = CurrentInventory[i];
 			WeaponSlotIndex = i;
 			break;
 		}
 	}
 
-	if (!WeaponToUse) return EBTNodeResult::Failed; // no weapon, flee instead
+	if (!WeaponToUse)
+	{
+		Board->SetValueAsBool(FName("HasWeapon"), false);
+		return EBTNodeResult::Failed;
+	}
 
-	// Face the zombie and use the weapon
-	Controller->SetFocalPoint(Zombie->GetActorLocation());
+	
+
+	float DistToZombie = FVector::Dist(Survivor->GetActorLocation(), Zombie->GetActorLocation());
+	if (DistToZombie > 100.f)
+	{
+		Controller->MoveToActor(Zombie, 50.f, false);
+		return EBTNodeResult::Succeeded;
+	}
+
+	FVector Direction = (Zombie->GetActorLocation() - Survivor->GetActorLocation()).GetSafeNormal();
+
+	Controller->SetControlRotation(Direction.Rotation());
 	Inventory->UseItem(WeaponSlotIndex);
 
-	// Update HasWeapon flag for decorator
+
+
+
 	bool bStillHasWeapon = false;
 	for (ABaseItem* Item : CurrentInventory)
 	{
