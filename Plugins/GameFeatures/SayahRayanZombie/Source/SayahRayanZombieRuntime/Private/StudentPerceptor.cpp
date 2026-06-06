@@ -47,10 +47,69 @@ void UStudentPerceptor::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 	if (!board) return;
 
 	
+	//TODO add fullname into this
 
+		
+    if (Stimulus.WasSuccessfullySensed())
+    {
+        board->SetValueAsBool(FName("PerceptedSomething"), true);
+
+        if (APurgeZone* SensedPurgeZone = Cast<APurgeZone>(Actor))
+            board->SetValueAsObject(FName("PurgeZone"), SensedPurgeZone);
+
+        if (ABaseZombie* SensedZombie = Cast<ABaseZombie>(Actor))
+            board->SetValueAsObject(FName("Zombie"), SensedZombie);
+
+        if (AHouse* SensedHouse = Cast<AHouse>(Actor))
+            if (!board->GetValueAsObject(FName("House")))
+                board->SetValueAsObject(FName("House"), SensedHouse);
+
+        if (AFood* SensedFood = Cast<AFood>(Actor))
+        {
+            board->SetValueAsObject(FName("Food"), SensedFood);
+            board->SetValueAsBool(FName("ItemSeen"), true);
+        }
+        else if (AMedkit* SensedMedkit = Cast<AMedkit>(Actor))
+        {
+            board->SetValueAsObject(FName("Medkit"), SensedMedkit);
+            board->SetValueAsBool(FName("ItemSeen"), true);
+        }
+        else if (APistol* SensedPistol = Cast<APistol>(Actor))
+        {
+            board->SetValueAsObject(FName("Handgun"), SensedPistol);
+            board->SetValueAsBool(FName("ItemSeen"), true);
+        }
+        else if (AShotgun* SensedShotgun = Cast<AShotgun>(Actor))
+        {
+            board->SetValueAsObject(FName("Shotgun"), SensedShotgun);
+            board->SetValueAsBool(FName("ItemSeen"), true);
+        }
+    }
+    else
+    {
+        // Clear only the specific thing that left perception
+
+
+        if (Cast<AFood>(Actor))        board->SetValueAsObject(FName("Food"), nullptr);
+        else if (Cast<AMedkit>(Actor)) board->SetValueAsObject(FName("Medkit"), nullptr);
+        else if (Cast<APistol>(Actor)) board->SetValueAsObject(FName("Handgun"), nullptr);
+        else if (Cast<AShotgun>(Actor))board->SetValueAsObject(FName("Shotgun"), nullptr);
+
+        // Only clear ItemSeen if all item keys are gone
+        if (!board->GetValueAsObject(FName("Food")) &&
+            !board->GetValueAsObject(FName("Medkit")) &&
+            !board->GetValueAsObject(FName("Handgun")) &&
+            !board->GetValueAsObject(FName("Shotgun")))
+        {
+            board->SetValueAsBool(FName("ItemSeen"), false);
+        }
+    }
 
 	if (Stimulus.WasSuccessfullySensed())
 	{
+		
+		board->SetValueAsBool(FName("PerceptedSomething"), true);
+		
 		GEngine->AddOnScreenDebugMessage(5, 1.f, FColor::Green, FString::Printf(TEXT("Stimulus succeeded!")));
 		if (APurgeZone* SensedPurgeZone = Cast<APurgeZone>(Actor) )
 		{
@@ -61,27 +120,7 @@ void UStudentPerceptor::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)
 		{
 			board->SetValueAsObject(FName("Zombie"), SensedZombie);
 		}
-		
-		if (AFood* SensedFood = Cast<AFood>(Actor) )
-		{
-			board->SetValueAsObject(FName("Food"), SensedFood);
-		}
-		
-		if (AMedkit* SensedMedkit = Cast<AMedkit>(Actor) )
-		{
-			board->SetValueAsObject(FName("Medkit"), SensedMedkit);
-		}
-		
-		if (APistol* SensedPistol = Cast<APistol>(Actor) )
-		{
-			board->SetValueAsObject(FName("Handgun"), SensedPistol);
-		}
-		
-		if (AShotgun* SensedShotgun = Cast<AShotgun>(Actor) )
-		{
-			board->SetValueAsObject(FName("Shotgun"), SensedShotgun);
-		}
-		
+
 		if (AHouse* SensedHouse = Cast<AHouse>(Actor) )
 		{
 			if (!board->GetValueAsObject(FName("House")))
