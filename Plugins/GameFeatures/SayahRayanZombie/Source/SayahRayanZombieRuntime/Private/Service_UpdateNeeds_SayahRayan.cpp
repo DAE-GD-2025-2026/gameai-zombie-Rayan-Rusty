@@ -41,6 +41,7 @@ void UService_UpdateNeeds_SayahRayan::TickNode(UBehaviorTreeComponent& OwnerComp
 	// If health dropped since last tick we got hit!
 	if (CurrentHealth < PreviousHealth)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("Health dropped from %.1f to %.1f - WasRecentlyAttacked set!"), PreviousHealth, CurrentHealth);
 		Board->SetValueAsBool(FName("WasRecentlyAttacked"), true);
 		TimeSinceLastHit = 0.f;
 	}
