@@ -4,6 +4,9 @@
 #include "Task_WanderAround_SayahRayan.h"
 
 #include "AIController.h"
+#include "NavigationSystem.h"
+#include "BehaviorTree/BlackboardComponent.h"
+#include "PurgeZones/PurgeZone.h"
 #include "Survivor/SurvivorPawn.h"
 
 UTask_WanderAround_SayahRayan::UTask_WanderAround_SayahRayan()
@@ -20,6 +23,13 @@ EBTNodeResult::Type UTask_WanderAround_SayahRayan::ExecuteTask(UBehaviorTreeComp
 	APawn* Pawn = Controller->GetPawn();
 	if (!Pawn) return EBTNodeResult::Failed;
 	
+	UBlackboardComponent* board = OwnerComp.GetBlackboardComponent();
+	if (!board) return EBTNodeResult::Failed;
+
+	ASurvivorPawn* survivor = Cast<ASurvivorPawn>(Controller->GetPawn());
+	if (!survivor) return EBTNodeResult::Failed;
+	
+	survivor->StopRunning();
 	
 	FVector PawnLocation = Pawn->GetActorLocation();
 	FVector2D Position2D(PawnLocation.X, PawnLocation.Y);
@@ -36,8 +46,36 @@ EBTNodeResult::Type UTask_WanderAround_SayahRayan::ExecuteTask(UBehaviorTreeComp
 
 	FVector TargetLocation(WanderTarget.X, WanderTarget.Y, PawnLocation.Z);
 
-	Controller->MoveToLocation(TargetLocation, AcceptanceRadius, false);
 
+	UNavigationSystemV1* NavSys = UNavigationSystemV1::GetCurrent(Pawn->GetWorld());
+	if (NavSys)
+	{
+		FNavLocation NavLocation;
+		if (NavSys->ProjectPointToNavigation(TargetLocation, NavLocation, FVector(100.f, 100.f, 100.f)))
+		{
+			TargetLocation = NavLocation.Location;
+		}
+		else
+		{
+
+			FNavLocation FallbackLocation;
+			if (NavSys->GetRandomReachablePointInRadius(PawnLocation, WanderRadius, FallbackLocation))
+				TargetLocation = FallbackLocation.Location;
+		}
+	}
+
+	if (IsInsidePurgeZone(TargetLocation , board ))
+		return EBTNodeResult::Failed;
+	
+	Controller->MoveToLocation(TargetLocation, AcceptanceRadius, false);
 	return EBTNodeResult::Succeeded;
 
+}
+
+bool UTask_WanderAround_SayahRayan::IsInsidePurgeZone(const FVector Location, UBlackboardComponent* Board) const
+{
+	APurgeZone* PurgeZone = Cast<APurgeZone>(Board->GetValueAsObject(FName("PurgeZone")));
+	if (!PurgeZone) return false;
+	
+	return PurgeZone->GetRootComponent()->Bounds.GetBox().IsInside(Location);
 }

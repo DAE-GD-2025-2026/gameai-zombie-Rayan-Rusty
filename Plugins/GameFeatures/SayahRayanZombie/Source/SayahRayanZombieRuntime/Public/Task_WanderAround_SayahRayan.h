@@ -32,5 +32,6 @@ protected:
 	
 	
 private:
+	bool IsInsidePurgeZone(const FVector Location , UBlackboardComponent* Board) const;
 	float WanderAngle = 0.f;
 };
