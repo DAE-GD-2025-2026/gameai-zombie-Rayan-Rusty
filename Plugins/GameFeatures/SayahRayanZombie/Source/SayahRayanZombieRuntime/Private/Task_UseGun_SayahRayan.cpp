@@ -17,13 +17,10 @@ UTask_UseGun_SayahRayan::UTask_UseGun_SayahRayan()
 
 EBTNodeResult::Type UTask_UseGun_SayahRayan::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
-	AAIController* Controller = OwnerComp.GetAIOwner();
-	if (!Controller) return EBTNodeResult::Failed;
-
 	UBlackboardComponent* Board = OwnerComp.GetBlackboardComponent();
 	if (!Board) return EBTNodeResult::Failed;
 
-	ASurvivorPawn* Survivor = Cast<ASurvivorPawn>(Controller->GetPawn());
+	ASurvivorPawn* Survivor = GetSurvivor(OwnerComp);
 	if (!Survivor) return EBTNodeResult::Failed;
 
 	ABaseZombie* Zombie = Cast<ABaseZombie>(Board->GetValueAsObject(FName("Zombie")));
@@ -32,65 +29,74 @@ EBTNodeResult::Type UTask_UseGun_SayahRayan::ExecuteTask(UBehaviorTreeComponent&
 	UInventoryComponent* Inventory = Survivor->FindComponentByClass<UInventoryComponent>();
 	if (!Inventory) return EBTNodeResult::Failed;
 
-
-	ABaseItem* WeaponToUse = nullptr;
-	int WeaponSlotIndex = -1;
-
-	
-	
-	
-	
-	
-	TArray<ABaseItem*> const& CurrentInventory = Inventory->GetInventory();
-	for (int i = 0; i < CurrentInventory.Num(); i++)
-	{
-		if (Cast<APistol>(CurrentInventory[i]) || Cast<AShotgun>(CurrentInventory[i]))
-		{
-			if (CurrentInventory[i]->GetValue() <= 0)
-			{
-				Inventory->RemoveItem(i);
-				continue;
-			}
-			
-			WeaponToUse = CurrentInventory[i];
-			WeaponSlotIndex = i;
-			break;
-		}
-	}
-
+	auto [WeaponToUse, WeaponSlot] = FindLowestAmmoWeapon(Inventory);
 	if (!WeaponToUse)
 	{
 		Board->SetValueAsBool(FName("HasWeapon"), false);
 		return EBTNodeResult::Failed;
 	}
 
-	
-
-	float DistToZombie = FVector::Dist(Survivor->GetActorLocation(), Zombie->GetActorLocation());
+	const float DistToZombie = FVector::Dist(Survivor->GetActorLocation(), Zombie->GetActorLocation());
 	if (DistToZombie > 100.f)
 	{
-		Controller->MoveToActor(Zombie, 50.f, false);
+		OwnerComp.GetAIOwner()->MoveToActor(Zombie, 50.f, false);
 		return EBTNodeResult::Succeeded;
 	}
 
-	FVector Direction = (Zombie->GetActorLocation() - Survivor->GetActorLocation()).GetSafeNormal();
+	const FVector Direction = (Zombie->GetActorLocation() - Survivor->GetActorLocation()).GetSafeNormal();
+	OwnerComp.GetAIOwner()->SetControlRotation(Direction.Rotation());
 
-	Controller->SetControlRotation(Direction.Rotation());
-	Inventory->UseItem(WeaponSlotIndex);
+	Inventory->UseItem(WeaponSlot);
 
+	// drop the weapon if its now empty !! 
+	if (WeaponToUse->GetValue() <= 0)
+		Inventory->RemoveItem(WeaponSlot);
 
+	UpdateHasWeapon(Inventory, Board);
+	return EBTNodeResult::Succeeded;
+}
 
+ASurvivorPawn* UTask_UseGun_SayahRayan::GetSurvivor(UBehaviorTreeComponent& OwnerComp) const
+{
+	AAIController* Controller = OwnerComp.GetAIOwner();
+	return Controller ? Cast<ASurvivorPawn>(Controller->GetPawn()) : nullptr;
+}
 
-	bool bStillHasWeapon = false;
-	for (ABaseItem* Item : CurrentInventory)
+TPair<ABaseItem*, int32> UTask_UseGun_SayahRayan::FindLowestAmmoWeapon(UInventoryComponent* Inventory) const
+{
+	const TArray<ABaseItem*>& Items = Inventory->GetInventory();
+
+	ABaseItem* BestWeapon    = nullptr;
+	int32      BestSlot      = INDEX_NONE;
+	int32      LowestAmmo    = TNumericLimits<int32>::Max();
+
+	for (int32 i = 0; i < Items.Num(); ++i)
 	{
-		if (Cast<APistol>(Item) || Cast<AShotgun>(Item))
+		ABaseItem* Item = Items[i];
+		if (!Item || !Item->IsA<APistol>() && !Item->IsA<AShotgun>()) continue;
+
+		// guns with no ammo get removed since they take up space!!!
+		if (Item->GetValue() <= 0)
 		{
-			bStillHasWeapon = true;
-			break;
+			Inventory->RemoveItem(i);
+			continue;
+		}
+
+		if (Item->GetValue() < LowestAmmo)
+		{
+			LowestAmmo  = Item->GetValue();
+			BestWeapon  = Item;
+			BestSlot    = i;
 		}
 	}
-	Board->SetValueAsBool(FName("HasWeapon"), bStillHasWeapon);
 
-	return EBTNodeResult::Succeeded;
+	return { BestWeapon, BestSlot };
+}
+
+void UTask_UseGun_SayahRayan::UpdateHasWeapon(UInventoryComponent* Inventory, UBlackboardComponent* Board) const
+{
+	const bool StillHasWeapon = Inventory->GetInventory().ContainsByPredicate(
+	[](const ABaseItem* Item) { return Item && (Item->IsA<APistol>() || Item->IsA<AShotgun>()); });
+
+	Board->SetValueAsBool(FName("HasWeapon"), StillHasWeapon);
 }

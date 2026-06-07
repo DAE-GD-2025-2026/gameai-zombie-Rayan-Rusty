@@ -4,6 +4,10 @@
 
 #include "CoreMinimal.h"
 #include "BehaviorTree/BTTaskNode.h"
+#include "Survivor/SurvivorPawn.h"
+#include "Items/BaseItem.h"
+#include "Common/InventoryComponent.h"
+#include "BehaviorTree/BlackboardComponent.h"
 #include "Task_UseGun_SayahRayan.generated.h"
 
 /**
@@ -16,5 +20,8 @@ class SAYAHRAYANZOMBIERUNTIME_API UTask_UseGun_SayahRayan : public UBTTaskNode
 public:
 	UTask_UseGun_SayahRayan();
 	virtual  EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
-	
+private:
+	ASurvivorPawn* GetSurvivor(UBehaviorTreeComponent& OwnerComp) const;
+	TPair<ABaseItem*, int32> FindLowestAmmoWeapon(UInventoryComponent* Inventory) const;
+	void UpdateHasWeapon(UInventoryComponent* Inventory, UBlackboardComponent* Board) const;
 };
