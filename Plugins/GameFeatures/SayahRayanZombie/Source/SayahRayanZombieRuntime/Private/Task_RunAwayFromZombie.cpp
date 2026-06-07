@@ -6,6 +6,7 @@
 #include "AIController.h"
 #include "NavigationSystem.h"
 #include "BehaviorTree/BlackboardComponent.h"
+#include "PurgeZones/PurgeZone.h"
 #include "Survivor/SurvivorPawn.h"
 #include "Zombies/BaseZombie.h"
 
@@ -28,6 +29,16 @@ EBTNodeResult::Type UTask_RunAwayFromZombie::ExecuteTask(UBehaviorTreeComponent&
 	ABaseZombie* Zombie = Cast<ABaseZombie>(board->GetValueAsObject(FName("Zombie")));
 	if (!Zombie) return EBTNodeResult::Failed;
 
+	
+	const float DistZombie = FVector::Dist(survivor->GetActorLocation() , Zombie->GetActorLocation());
+
+	if (DistZombie > 1500.f)
+	{
+		board->SetValueAsObject(FName("Zombie") , nullptr);
+		survivor->StopRunning();
+		return EBTNodeResult::Succeeded;
+	}
+
 	GEngine->AddOnScreenDebugMessage(5, 1.f, FColor::Blue, 
 FString::Printf(TEXT("Enemy nearby run away!")));
 	
@@ -42,8 +53,30 @@ FString::Printf(TEXT("Enemy nearby run away!")));
 		FleeTarget = NavLocation.Location;
 	}
 
+	
+	if (IsInsidePurgeZone(FleeTarget , board ))
+	{
+		survivor->StopRunning();
+		return EBTNodeResult::Failed;
+	}
+
+	
+	if (DistZombie < 500.f)
+	{
+		survivor->StartRunning();	
+	}
+	
+	
 	Controller->MoveToLocation(FleeTarget, 50.f, false);
 
 	return EBTNodeResult::Succeeded;
 
+}
+
+bool UTask_RunAwayFromZombie::IsInsidePurgeZone(const FVector Location, UBlackboardComponent* Board) const
+{
+	APurgeZone* PurgeZone = Cast<APurgeZone>(Board->GetValueAsObject(FName("PurgeZone")));
+	if (!PurgeZone) return false;
+	
+	return PurgeZone->GetRootComponent()->Bounds.GetBox().IsInside(Location);
 }
