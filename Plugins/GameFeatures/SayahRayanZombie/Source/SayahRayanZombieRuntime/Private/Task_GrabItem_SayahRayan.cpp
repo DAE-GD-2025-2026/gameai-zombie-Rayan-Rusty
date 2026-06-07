@@ -28,6 +28,10 @@ EBTNodeResult::Type UTask_GrabItem_SayahRayan::ExecuteTask(UBehaviorTreeComponen
 	ABaseItem* ItemToGrab = ResolvePriorityItem(Board);
 	if (!ItemToGrab) return EBTNodeResult::Failed;
 
+	const float Dist = FVector::Dist(Survivor->GetActorLocation(), ItemToGrab->GetActorLocation());
+
+
+
 	UInventoryComponent* Inventory = Survivor->FindComponentByClass<UInventoryComponent>();
 	if (!Inventory) return EBTNodeResult::Failed;
 	if (FindEmptySlot(Inventory) == INDEX_NONE)
@@ -140,12 +144,14 @@ bool UTask_GrabItem_SayahRayan::TryDropLowestPriorityItem(UInventoryComponent* I
 		{
 			if (Items[i] && Items[i]->IsA(Class))
 			{
+				const FString DroppedName = Items[i]->GetName();
 				Inventory->RemoveItem(i);
 
 				const bool StillHasWeapon = Items.ContainsByPredicate(
 					[](const ABaseItem* Item) { return Item && (Item->IsA<APistol>() || Item->IsA<AShotgun>()); });
 				Board->SetValueAsBool(FName("HasWeapon"), StillHasWeapon);
 
+				UE_LOG(LogTemp , Warning , TEXT("Droppedweapon : %s tomake room for consumable") , *DroppedName);
 				return true;
 			}
 		}

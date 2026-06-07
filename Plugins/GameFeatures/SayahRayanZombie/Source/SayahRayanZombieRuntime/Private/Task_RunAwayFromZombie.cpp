@@ -43,7 +43,7 @@ EBTNodeResult::Type UTask_RunAwayFromZombie::ExecuteTask(UBehaviorTreeComponent&
 FString::Printf(TEXT("Enemy nearby run away!")));
 	
 	FVector FleeDirection = (survivor->GetActorLocation() - Zombie->GetActorLocation()).GetSafeNormal();
-	FVector FleeTarget = survivor->GetActorLocation() + FleeDirection * 500.f;
+	FVector FleeTarget = survivor->GetActorLocation() + FleeDirection * 1000.f;
 
 	
 	UNavigationSystemV1* NavSys = UNavigationSystemV1::GetCurrent(survivor->GetWorld());

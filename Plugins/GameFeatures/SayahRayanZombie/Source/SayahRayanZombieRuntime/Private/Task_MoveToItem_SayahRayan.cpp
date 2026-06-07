@@ -37,6 +37,14 @@ EBTNodeResult::Type UTask_MoveToItem_SayahRayan::ExecuteTask(UBehaviorTreeCompon
 	ABaseItem* TargetItem = ResolvePriorityItem(Board, StaminaMoreUrgent);
 	if (!TargetItem) return EBTNodeResult::Failed;
 
+	
+	const float Dist = FVector::Dist(Survivor->GetActorLocation(), TargetItem->GetActorLocation());
+	if (Dist <= 80.f)
+	{
+		return EBTNodeResult::Failed;
+	};
+
+	
 	MoveToItem(OwnerComp.GetAIOwner(), Survivor, TargetItem);
 	return EBTNodeResult::Succeeded;
 }
@@ -85,8 +93,6 @@ bool UTask_MoveToItem_SayahRayan::IsInventoryFull(UInventoryComponent* Inventory
 void UTask_MoveToItem_SayahRayan::MoveToItem(AAIController* Controller, ASurvivorPawn* Survivor,
 	ABaseItem* TargetItem) const
 {
-	const float Dist = FVector::Dist(Survivor->GetActorLocation(), TargetItem->GetActorLocation());
-	if (Dist <= 100.f) return;
 
 	FVector TargetLocation = TargetItem->GetActorLocation();
 
