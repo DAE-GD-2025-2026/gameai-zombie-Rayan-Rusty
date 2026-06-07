@@ -19,88 +19,137 @@ UTask_GrabItem_SayahRayan::UTask_GrabItem_SayahRayan()
 
 EBTNodeResult::Type UTask_GrabItem_SayahRayan::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
-	AAIController* Controller = OwnerComp.GetAIOwner();
-	if (!Controller) return EBTNodeResult::Failed;
-
 	UBlackboardComponent* Board = OwnerComp.GetBlackboardComponent();
 	if (!Board) return EBTNodeResult::Failed;
 
-	APawn* Pawn = Controller->GetPawn();
-	ASurvivorPawn* Survivor = Cast<ASurvivorPawn>(Pawn);
+	ASurvivorPawn* Survivor = GetSurvivor(OwnerComp);
 	if (!Survivor) return EBTNodeResult::Failed;
-	
-	UHealthComponent* HealthComp = Survivor->FindComponentByClass<UHealthComponent>();
-	UStaminaComponent* StaminaComp = Survivor->FindComponentByClass<UStaminaComponent>();
-	
-	ABaseItem* ItemToGrab = nullptr;
 
-	if (!ItemToGrab)
-	{
-		if (AMedkit* Medkit = Cast<AMedkit>(Board->GetValueAsObject(FName("Medkit"))))
-			ItemToGrab = Medkit;
-		else if (AFood* Food = Cast<AFood>(Board->GetValueAsObject(FName("Food"))))
-			ItemToGrab = Food;
-		else if (APistol* Pistol = Cast<APistol>(Board->GetValueAsObject(FName("Handgun"))))
-			ItemToGrab = Pistol;
-		else if (AShotgun* Shotgun = Cast<AShotgun>(Board->GetValueAsObject(FName("Shotgun"))))
-			ItemToGrab = Shotgun;
-		
-
-	}
-
+	ABaseItem* ItemToGrab = ResolvePriorityItem(Board);
 	if (!ItemToGrab) return EBTNodeResult::Failed;
-	
-	float Dist = FVector::Dist(Survivor->GetActorLocation(), ItemToGrab->GetActorLocation());
 
 	UInventoryComponent* Inventory = Survivor->FindComponentByClass<UInventoryComponent>();
 	if (!Inventory) return EBTNodeResult::Failed;
-
-	int EmptySlotIndex = -1;
-	TArray<ABaseItem*> const& CurrentInventory = Inventory->GetInventory();
-	for (int i = 0; i < CurrentInventory.Num(); i++)
+	if (FindEmptySlot(Inventory) == INDEX_NONE)
 	{
-		if (CurrentInventory[i] == nullptr)
+		const bool bNeedsConsumable = ItemToGrab->IsA<AFood>() || ItemToGrab->IsA<AMedkit>();
+		if (!bNeedsConsumable || !TryDropLowestPriorityItem(Inventory, Board))
 		{
-			EmptySlotIndex = i;
-			break;
+			GEngine->AddOnScreenDebugMessage(6, 2.f, FColor::Red, TEXT("GrabItem FAILED: No empty slot"));
+			return EBTNodeResult::Failed;
 		}
 	}
 
-	if (EmptySlotIndex == -1)
-	{
-		GEngine->AddOnScreenDebugMessage(6, 2.f, FColor::Red, TEXT("GrabItem FAILED: No empty slot"));
-		return EBTNodeResult::Failed;
-	}
-	
+	const int32 EmptySlot = FindEmptySlot(Inventory);
+	if (EmptySlot == INDEX_NONE) return EBTNodeResult::Failed;
+
 	UE_LOG(LogTemp, Warning, TEXT("Attempting grab: Slot=%d, Item=%s, Dist=%.1f"),
-	EmptySlotIndex, *ItemToGrab->GetName(), Dist);
+		EmptySlot, *ItemToGrab->GetName(),
+		FVector::Dist(Survivor->GetActorLocation(), ItemToGrab->GetActorLocation()));
 
-	if (Inventory->GrabItem(EmptySlotIndex, ItemToGrab))
-	{
-		if (Cast<AFood>(ItemToGrab))         Board->SetValueAsObject(FName("Food"), nullptr);
-		else if (Cast<AMedkit>(ItemToGrab))  Board->SetValueAsObject(FName("Medkit"), nullptr);
-		else if (Cast<APistol>(ItemToGrab))  Board->SetValueAsObject(FName("Handgun"), nullptr);
-		else if (Cast<AShotgun>(ItemToGrab)) Board->SetValueAsObject(FName("Shotgun"), nullptr);
+	if (!Inventory->GrabItem(EmptySlot, ItemToGrab))
+		return EBTNodeResult::Failed;
 
-		Board->SetValueAsBool(FName("ItemSeen") , false);
-		
-		if (Cast<APistol>(ItemToGrab) || Cast<AShotgun>(ItemToGrab))
-			Board->SetValueAsBool(FName("HasWeapon"), true);
-		
-		bool NowFull {true};
-		for (ABaseItem* Item :CurrentInventory)
-		{
-			if (Item == nullptr) { NowFull = false; }
-		}
-		Board->SetValueAsBool(FName("IsInventoryFull"), NowFull);
-		return EBTNodeResult::Succeeded;
-	}
-	else
-	{
-
-	}
-	
-
-
-	return EBTNodeResult::Failed;
+	UpdateBlackboardPostGrab(Board, ItemToGrab, Inventory);
+	return EBTNodeResult::Succeeded;
 }
+
+ASurvivorPawn* UTask_GrabItem_SayahRayan::GetSurvivor(UBehaviorTreeComponent& OwnerComp) const
+{
+	AAIController* Controller = OwnerComp.GetAIOwner();
+	return Controller ? Cast<ASurvivorPawn>(Controller->GetPawn()) : nullptr;
+}
+
+ABaseItem* UTask_GrabItem_SayahRayan::ResolvePriorityItem(UBlackboardComponent* Board) const
+{
+	const TArray<TPair<FName, TSubclassOf<ABaseItem>>> Priority =
+	{
+		{ FName("Medkit"),   AMedkit::StaticClass()  },
+		{ FName("Food"),     AFood::StaticClass()    },
+		{ FName("Handgun"),  APistol::StaticClass()  },
+		{ FName("Shotgun"),  AShotgun::StaticClass() },
+	};
+
+	for (const auto& [Key, Class] : Priority)
+	{
+		if (ABaseItem* Item = Cast<ABaseItem>(Board->GetValueAsObject(Key)))
+			return Item;
+	}
+	return nullptr;
+}
+
+int32 UTask_GrabItem_SayahRayan::FindEmptySlot(UInventoryComponent* Inventory) const
+{
+	const TArray<ABaseItem*>& Items = Inventory->GetInventory();
+	for (int32 i = 0; i < Items.Num(); ++i)
+	{
+		if (Items[i] == nullptr) return i;
+	}
+	return INDEX_NONE;
+}
+
+void UTask_GrabItem_SayahRayan::ClearItemFromBlackboard(UBlackboardComponent* Board, const ABaseItem* Item) const
+{
+	const TArray<TPair<FName, TSubclassOf<ABaseItem>>> KeyMap =
+	{
+		{ FName("Medkit"),   AMedkit::StaticClass()  },
+		{ FName("Food"),     AFood::StaticClass()    },
+		{ FName("Handgun"),  APistol::StaticClass()  },
+		{ FName("Shotgun"),  AShotgun::StaticClass() },
+	};
+
+	for (const auto& [Key, Class] : KeyMap)
+	{
+		if (Item->IsA(Class))
+		{
+			Board->SetValueAsObject(Key, nullptr);
+			return;
+		}
+	}
+}
+
+void UTask_GrabItem_SayahRayan::UpdateBlackboardPostGrab(UBlackboardComponent* Board, const ABaseItem* GrabbedItem,
+	UInventoryComponent* Inventory) const
+{
+	ClearItemFromBlackboard(Board, GrabbedItem);
+
+	Board->SetValueAsBool(FName("ItemSeen"), false);
+
+	if (GrabbedItem->IsA<APistol>() || GrabbedItem->IsA<AShotgun>())
+		Board->SetValueAsBool(FName("HasWeapon"), true);
+
+	const bool bInventoryFull = Inventory->GetInventory().FindByPredicate(
+		[](const ABaseItem* Item) { return Item == nullptr; }) == nullptr;
+    
+	Board->SetValueAsBool(FName("IsInventoryFull"), bInventoryFull);
+}
+
+bool UTask_GrabItem_SayahRayan::TryDropLowestPriorityItem(UInventoryComponent* Inventory, UBlackboardComponent* Board) const
+{
+	// Drop order is pistol then shotgun
+	const TArray<TSubclassOf<ABaseItem>> DropOrder =
+	{
+		APistol::StaticClass(),
+		AShotgun::StaticClass()
+	};
+
+	const TArray<ABaseItem*>& Items = Inventory->GetInventory();
+	for (const TSubclassOf<ABaseItem>& Class : DropOrder)
+	{
+		for (int32 i = 0; i < Items.Num(); ++i)
+		{
+			if (Items[i] && Items[i]->IsA(Class))
+			{
+				Inventory->RemoveItem(i);
+
+				const bool StillHasWeapon = Items.ContainsByPredicate(
+					[](const ABaseItem* Item) { return Item && (Item->IsA<APistol>() || Item->IsA<AShotgun>()); });
+				Board->SetValueAsBool(FName("HasWeapon"), StillHasWeapon);
+
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
