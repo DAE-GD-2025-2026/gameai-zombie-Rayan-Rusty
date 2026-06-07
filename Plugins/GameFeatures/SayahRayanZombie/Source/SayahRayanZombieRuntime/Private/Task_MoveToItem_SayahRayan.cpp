@@ -19,81 +19,86 @@ UTask_MoveToItem_SayahRayan::UTask_MoveToItem_SayahRayan()
 
 EBTNodeResult::Type UTask_MoveToItem_SayahRayan::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
-	//TODO empty gun , check inventory fix snapping by using project navmesh
-	AAIController* Controller = OwnerComp.GetAIOwner();
-	if (!Controller) return EBTNodeResult::Failed;
-
 	UBlackboardComponent* Board = OwnerComp.GetBlackboardComponent();
 	if (!Board) return EBTNodeResult::Failed;
 
-	ASurvivorPawn* Survivor = Cast<ASurvivorPawn>(Controller->GetPawn());
+	ASurvivorPawn* Survivor = GetSurvivor(OwnerComp);
 	if (!Survivor) return EBTNodeResult::Failed;
 
-	UHealthComponent* HealthComp = Survivor->FindComponentByClass<UHealthComponent>();
+	Survivor->StopRunning();
+	UHealthComponent*  HealthComp  = Survivor->FindComponentByClass<UHealthComponent>();
 	UStaminaComponent* StaminaComp = Survivor->FindComponentByClass<UStaminaComponent>();
+	if (!HealthComp || !StaminaComp) return EBTNodeResult::Failed;
 
+	const float HealthPercent     = GetStatPercent(HealthComp->GetHealth(), HealthComp->GetMaxHealth());
+	const float StaminaPercent    = GetStatPercent(StaminaComp->GetCurrentStamina(), StaminaComp->GetMaxStamina());
+	const bool  StaminaMoreUrgent = StaminaPercent < HealthPercent;
 
-	float HealthPercent =  HealthComp->GetHealth() / HealthComp->GetMaxHealth();
-	float StaminePercent = StaminaComp->GetCurrentStamina() / StaminaComp->GetMaxStamina();
-
-	bool StaminaMoreUrgent = StaminePercent < HealthPercent;
-	ABaseItem* TargetItem = nullptr;
-
-
-	if (StaminaMoreUrgent)
-	{
-		if (AFood* Food = Cast<AFood>(Board->GetValueAsObject(FName("Food"))))
-		{
-			TargetItem = Food;
-		}
-		else if (AMedkit* Medkit = Cast<AMedkit>(Board->GetValueAsObject(FName("Medkit"))))
-		{
-			TargetItem = Medkit;
-		}
-	}
-	else
-	{
-		if (AMedkit* Medkit = Cast<AMedkit>(Board->GetValueAsObject(FName("Medkit"))))
-		{
-			TargetItem = Medkit;
-		}
-		else if(AFood* Food = Cast<AFood>(Board->GetValueAsObject(FName("Food"))))
-		{
-			TargetItem = Food;
-		}
-	}
-
-	if (!TargetItem)
-	{
-		if (APistol* Pistol = Cast<APistol>(Board->GetValueAsObject(FName("Handgun"))))
-			TargetItem = Pistol;
-		else if (AShotgun* Shotgun = Cast<AShotgun>(Board->GetValueAsObject(FName("Shotgun"))))
-			TargetItem = Shotgun;
-	}
-
-	
+	ABaseItem* TargetItem = ResolvePriorityItem(Board, StaminaMoreUrgent);
 	if (!TargetItem) return EBTNodeResult::Failed;
 
-	float Dist = FVector::Dist(Survivor->GetActorLocation(), TargetItem->GetActorLocation());
+	MoveToItem(OwnerComp.GetAIOwner(), Survivor, TargetItem);
+	return EBTNodeResult::Succeeded;
+}
 
-	if (Dist > 100.f)
+ASurvivorPawn* UTask_MoveToItem_SayahRayan::GetSurvivor(UBehaviorTreeComponent& OwnerComp) const
+{
+	AAIController* Controller = OwnerComp.GetAIOwner();
+	return Controller ? Cast<ASurvivorPawn>(Controller->GetPawn()) : nullptr;
+}
+
+ABaseItem* UTask_MoveToItem_SayahRayan::ResolvePriorityItem(UBlackboardComponent* Board, bool StaminaMoreUrgent) const
+{
+	const TArray<FName> ConsumableOrder = StaminaMoreUrgent
+	? TArray<FName>{ FName("Food"), FName("Medkit") }
+	: TArray<FName>{ FName("Medkit"), FName("Food") };
+
+	for (const FName& Key : ConsumableOrder)
 	{
-		FVector TargetLocation = TargetItem->GetActorLocation();
-
-		// Project onto navmesh
-		UNavigationSystemV1* NavSys = UNavigationSystemV1::GetCurrent(Survivor->GetWorld());
-		FNavLocation NavLocation;
-		if (NavSys && NavSys->ProjectPointToNavigation(TargetLocation, NavLocation))
-		{
-			TargetLocation = NavLocation.Location;
-		}
-
-		Controller->MoveToLocation(TargetLocation, 20.f, false);
-		return EBTNodeResult::Succeeded;
+		if (ABaseItem* Item = Cast<ABaseItem>(Board->GetValueAsObject(Key)))
+			return Item;
 	}
 
-	
+	// Fall back to weapons if no consumables available
+	const TArray<FName> WeaponOrder = { FName("Handgun"), FName("Shotgun") };
+	for (const FName& Key : WeaponOrder)
+	{
+		if (ABaseItem* Item = Cast<ABaseItem>(Board->GetValueAsObject(Key)))
+			return Item;
+	}
 
-	return EBTNodeResult::Succeeded;
+	return nullptr;
+}
 
+bool UTask_MoveToItem_SayahRayan::IsInventoryFull(UInventoryComponent* Inventory) const
+{
+	return Inventory->GetInventory().FindByPredicate(
+	[](const ABaseItem* Item)
+	{
+		return Item == nullptr;
+	}
+	) == nullptr;
+}
+
+
+
+void UTask_MoveToItem_SayahRayan::MoveToItem(AAIController* Controller, ASurvivorPawn* Survivor,
+	ABaseItem* TargetItem) const
+{
+	const float Dist = FVector::Dist(Survivor->GetActorLocation(), TargetItem->GetActorLocation());
+	if (Dist <= 100.f) return;
+
+	FVector TargetLocation = TargetItem->GetActorLocation();
+
+	UNavigationSystemV1* NavSys = UNavigationSystemV1::GetCurrent(Survivor->GetWorld());
+	FNavLocation NavLocation;
+	if (NavSys && NavSys->ProjectPointToNavigation(TargetLocation, NavLocation))
+		TargetLocation = NavLocation.Location;
+
+	Controller->MoveToLocation(TargetLocation, 20.f, false);
+}
+
+float UTask_MoveToItem_SayahRayan::GetStatPercent(float Current, float Max) const
+{
+	return Max > 0.f ? Current / Max : 0.f;
 }
