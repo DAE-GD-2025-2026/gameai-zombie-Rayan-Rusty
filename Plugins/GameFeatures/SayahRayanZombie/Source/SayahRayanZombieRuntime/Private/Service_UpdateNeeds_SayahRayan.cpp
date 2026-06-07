@@ -29,10 +29,29 @@ void UService_UpdateNeeds_SayahRayan::TickNode(UBehaviorTreeComponent& OwnerComp
 	UHealthComponent* HealthComp = Survivor->FindComponentByClass<UHealthComponent>();
 	UStaminaComponent* StaminaComp = Survivor->FindComponentByClass<UStaminaComponent>();
 	if (!HealthComp || !StaminaComp) return;
-
-	float MissingHealth = HealthComp->GetMaxHealth() - HealthComp->GetHealth();
+	
+	const float CurrentHealth  = HealthComp->GetHealth();
+	float MissingHealth = HealthComp->GetMaxHealth() - CurrentHealth;
 	float MissingStamina =  StaminaComp->GetMaxStamina() - StaminaComp->GetCurrentStamina();
 	
 	Board->SetValueAsBool(FName("NeedsHealthOrStamina"), MissingHealth > 0.f || MissingStamina > 0.f);
 	
+
+	
+	// If health dropped since last tick we got hit!
+	if (CurrentHealth < PreviousHealth)
+	{
+		Board->SetValueAsBool(FName("WasRecentlyAttacked"), true);
+		TimeSinceLastHit = 0.f;
+	}
+
+	// clear it after cooldown so it doesnt stay true
+	if (Board->GetValueAsBool(FName("WasRecentlyAttacked")))
+	{
+		TimeSinceLastHit += DeltaSeconds;
+		if (TimeSinceLastHit >= AttackMemoryDuration)
+			Board->SetValueAsBool(FName("WasRecentlyAttacked"), false);
+	}
+	
+	PreviousHealth = CurrentHealth;
 }

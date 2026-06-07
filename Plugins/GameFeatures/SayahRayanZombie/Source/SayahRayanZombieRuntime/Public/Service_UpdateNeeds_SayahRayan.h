@@ -17,4 +17,9 @@ public:
 	UService_UpdateNeeds_SayahRayan();
 protected:
 	virtual void TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
+
+private:
+	float PreviousHealth       = 0.f;
+	float TimeSinceLastHit     = 0.f;
+	float AttackMemoryDuration = 2.f;
 };
