@@ -43,15 +43,39 @@ EBTNodeResult::Type UTask_RunAwayFromZombie::ExecuteTask(UBehaviorTreeComponent&
 FString::Printf(TEXT("Enemy nearby run away!")));
 	
 	FVector FleeDirection = (survivor->GetActorLocation() - Zombie->GetActorLocation()).GetSafeNormal();
-	FVector FleeTarget = survivor->GetActorLocation() + FleeDirection * 1000.f;
 
+
+	float FleeYaw = FMath::Atan2(FleeDirection.Y, FleeDirection.X);
+	FleeAngle = FMath::Lerp(FleeAngle, FleeYaw, 0.3f); // gradually steer toward flee direction
+	FleeAngle += FMath::DegreesToRadians(FMath::RandRange(-MaxAngleChange, MaxAngleChange)); // keep some randomness
+
+	FVector2D SurvivorPos(survivor->GetActorLocation().X, survivor->GetActorLocation().Y);
+	FVector2D Forward(survivor->GetActorForwardVector().X, survivor->GetActorForwardVector().Y);
+	FVector2D CircleCenter = SurvivorPos + Forward * OffsetDistance;
+
+	FVector2D WanderTarget(
+		CircleCenter.X + FMath::Cos(FleeAngle) * FleeRadius,
+		CircleCenter.Y + FMath::Sin(FleeAngle) * FleeRadius
+	);
+
+	FVector FleeTarget(WanderTarget.X, WanderTarget.Y, survivor->GetActorLocation().Z);
 	
 	UNavigationSystemV1* NavSys = UNavigationSystemV1::GetCurrent(survivor->GetWorld());
-	FNavLocation NavLocation;
-	if (NavSys && NavSys->GetRandomReachablePointInRadius(FleeTarget, 200.f, NavLocation))
+	if (NavSys)
 	{
-		FleeTarget = NavLocation.Location;
+		FNavLocation NavLocation;
+		if (NavSys->ProjectPointToNavigation(FleeTarget, NavLocation, FVector(100.f, 100.f, 100.f)))
+		{
+			FleeTarget = NavLocation.Location;
+		}
+		else
+		{
+			FNavLocation FallbackLocation;
+			if (NavSys->GetRandomReachablePointInRadius(survivor->GetActorLocation(), FleeRadius, FallbackLocation))
+				FleeTarget = FallbackLocation.Location;
+		}
 	}
+
 
 	
 	if (IsInsidePurgeZone(FleeTarget , board ))

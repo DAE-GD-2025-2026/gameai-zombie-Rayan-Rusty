@@ -18,4 +18,8 @@ public:
 	virtual  EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 private:
 	bool IsInsidePurgeZone(const FVector Location , UBlackboardComponent* Board) const;
+	float FleeAngle {0.f};
+	float OffsetDistance = 150.f;
+	float FleeRadius = 100.f;
+	float MaxAngleChange = 30.f;
 };
