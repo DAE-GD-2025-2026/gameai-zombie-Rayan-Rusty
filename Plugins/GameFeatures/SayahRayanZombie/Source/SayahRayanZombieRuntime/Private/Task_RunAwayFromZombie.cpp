@@ -49,16 +49,19 @@ FString::Printf(TEXT("Enemy nearby run away!")));
 	FleeAngle = FMath::Lerp(FleeAngle, FleeYaw, 0.3f); // gradually steer toward flee direction
 	FleeAngle += FMath::DegreesToRadians(FMath::RandRange(-MaxAngleChange, MaxAngleChange)); // keep some randomness
 
-	FVector2D SurvivorPos(survivor->GetActorLocation().X, survivor->GetActorLocation().Y);
-	FVector2D Forward(survivor->GetActorForwardVector().X, survivor->GetActorForwardVector().Y);
-	FVector2D CircleCenter = SurvivorPos + Forward * OffsetDistance;
 
-	FVector2D WanderTarget(
+
+	FVector2D FleeDir2D(FleeDirection.X, FleeDirection.Y); // already normalized, away from zombie
+
+	FVector2D SurvivorPos(survivor->GetActorLocation().X, survivor->GetActorLocation().Y);
+	FVector2D CircleCenter = SurvivorPos + FleeDir2D * OffsetDistance;
+
+	FVector2D FleeSampleTarget2D(
 		CircleCenter.X + FMath::Cos(FleeAngle) * FleeRadius,
 		CircleCenter.Y + FMath::Sin(FleeAngle) * FleeRadius
 	);
 
-	FVector FleeTarget(WanderTarget.X, WanderTarget.Y, survivor->GetActorLocation().Z);
+	FVector FleeTarget(FleeSampleTarget2D.X, FleeSampleTarget2D.Y, survivor->GetActorLocation().Z);
 	
 	UNavigationSystemV1* NavSys = UNavigationSystemV1::GetCurrent(survivor->GetWorld());
 	if (NavSys)
